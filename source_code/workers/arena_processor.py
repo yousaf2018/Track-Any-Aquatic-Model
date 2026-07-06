@@ -197,17 +197,16 @@ class ArenaWorker(QThread):
 
     def run(self):
         try:
-            os.environ['OMP_NUM_THREADS'] = '1'
-            os.environ['MKL_NUM_THREADS'] = '1'
-            os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+            # NOTE: Removed CUDA_LAUNCH_BLOCKING (a debug flag that serialises every
+            # GPU kernel and destroys utilisation) and the single-thread caps
+            # (OMP/MKL/torch/cv2) that starved the GPU by throttling CPU-side
+            # video decode + preprocessing. These are the reason GPU-Util was low.
             import cv2
             import torch
             from ultralytics import YOLO
-            
-            cv2.setNumThreads(0)
-            if torch.cuda.is_available(): 
+
+            if torch.cuda.is_available():
                 torch.cuda.init()
-                torch.set_num_threads(1)
 
             start_batch_time = time.time()
             all_arenas = []
