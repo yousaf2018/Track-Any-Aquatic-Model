@@ -5,6 +5,19 @@ from collections import defaultdict
 from scipy.optimize import linear_sum_assignment
 from PyQt6.QtCore import QThread, pyqtSignal
 
+# ==============================================================================
+# NATIVE LIBRARY IMPORTS (Moved to module-level)
+# Importing these on the main thread prevents OpenMP / MKL / OpenBLAS thread 
+# pool initialization race conditions inside child QThreads, which is the 
+# leading cause of SIGSEGV crashes on Linux.
+# ==============================================================================
+try:
+    import cv2
+    import torch
+    from ultralytics import YOLO
+except ImportError:
+    pass
+
 class Stopwatch:
     def __init__(self): self.start_time = 0
     def start(self): self.start_time = time.time()
@@ -201,12 +214,9 @@ class ArenaWorker(QThread):
             # GPU kernel and destroys utilisation) and the single-thread caps
             # (OMP/MKL/torch/cv2) that starved the GPU by throttling CPU-side
             # video decode + preprocessing. These are the reason GPU-Util was low.
-            import cv2
-            import torch
-            from ultralytics import YOLO
-
-            if torch.cuda.is_available():
-                torch.cuda.init()
+            
+            # (Dynamic sub-thread imports were relocated to the top of the file 
+            # to block OpenMP initialization race conditions)
 
             start_batch_time = time.time()
             all_arenas = []
@@ -329,6 +339,9 @@ class ArenaWorker(QThread):
                                             cv2.circle(frame, (int(cx), int(cy)), self.dot_sz, (0, 0, 255), -1)
 
                             if inf_writer and frame is not None and frame.size > 0: 
+                                # Size guard to prevent uncatchable segmentation faults inside VideoWriter
+                                if frame.shape[1] != width or frame.shape[0] != height:
+                                    frame = cv2.resize(frame, (width, height))
                                 inf_writer.write(frame)
                             
                             frame_count_fps += 1
@@ -488,7 +501,10 @@ class ArenaWorker(QThread):
                                     (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_DUPLEX, self.l_scale, self.l_thick)
                                     cv2.rectangle(frame, (x1, y1-th-10), (x1+tw+10, y1), color, -1)
                                     cv2.putText(frame, label, (x1+5, y1-7), cv2.FONT_HERSHEY_DUPLEX, self.l_scale, (255,255,255), self.l_thick, cv2.LINE_AA)
-                                    
+                                
+                                # Size guard to prevent uncatchable crashes inside tracking output video writer
+                                if frame.shape[1] != width or frame.shape[0] != height:
+                                    frame = cv2.resize(frame, (width, height))
                                 trk_writer.write(frame)
                                 # Emit rendering progress updates every 500 frames instead of 10
                                 if f_idx % 500 == 0 or f_idx == total_frames - 1:
@@ -518,8 +534,6 @@ class ArenaWorker(QThread):
             self.finished_signal.emit(f"❌ Error: {str(e)}")
 
     def _generate_analytics(self, base_n, flat_data, bg, out, width, height):
-        import cv2
-        
         if not flat_data: return
         df = pd.DataFrame(flat_data)
         
@@ -618,7 +632,14 @@ class ArenaWorker(QThread):
         # 5. Render Trajectories
         if self.config.get('save_traj') and bg is not None:
             try:
-                canvas = bg.copy()
+                # Ensure the canvas has 3 color channels (BGR) to prevent channel-mismatch crashes
+                if len(bg.shape) == 2:
+                    canvas = cv2.cvtColor(bg, cv2.COLOR_GRAY2BGR)
+                elif bg.shape[2] == 1:
+                    canvas = cv2.cvtColor(bg, cv2.COLOR_GRAY2BGR)
+                else:
+                    canvas = bg.copy()
+
                 for a_id in sorted(export_df['Arena'].unique()):
                     for o_id in sorted(export_df[export_df['Arena']==a_id]['ID'].unique()):
                         subset = export_df[(export_df['Arena']==a_id)&(export_df['ID']==o_id)].sort_values("Frame")
@@ -637,13 +658,21 @@ class ArenaWorker(QThread):
         # 6. Render Heatmap
         if self.config.get('save_heat') and bg is not None:
             try:
-                h, w = bg.shape[:2]; accum = np.zeros((h, w), dtype=np.float32)
+                # Ensure the background has 3 color channels (BGR) to prevent channel-mismatch crashes
+                if len(bg.shape) == 2:
+                    bg_color = cv2.cvtColor(bg, cv2.COLOR_GRAY2BGR)
+                elif bg.shape[2] == 1:
+                    bg_color = cv2.cvtColor(bg, cv2.COLOR_GRAY2BGR)
+                else:
+                    bg_color = bg.copy()
+
+                h, w = bg_color.shape[:2]; accum = np.zeros((h, w), dtype=np.float32)
                 for _, r in export_df.iterrows(): cv2.circle(accum, (int(r['X']), int(r['Y'])), 10, 0.4, -1)
                 accum = cv2.normalize(cv2.GaussianBlur(accum, (51, 51), 0), None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
                 heatmap = cv2.applyColorMap(accum, cv2.COLORMAP_JET)
                 
-                if bg.shape[:2] == heatmap.shape[:2]:
-                    cv2.imwrite(os.path.join(out, f"{base_n}_heatmap.png"), cv2.addWeighted(bg, 0.6, heatmap, 0.4, 0))
+                if bg_color.shape[:2] == heatmap.shape[:2]:
+                    cv2.imwrite(os.path.join(out, f"{base_n}_heatmap.png"), cv2.addWeighted(bg_color, 0.6, heatmap, 0.4, 0))
                 else:
                     cv2.imwrite(os.path.join(out, f"{base_n}_heatmap.png"), heatmap)
             except Exception as e:

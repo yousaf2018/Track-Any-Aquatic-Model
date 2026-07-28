@@ -139,7 +139,8 @@ class TransitionVerifierDialog(QDialog):
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb.shape
             bytes_per_line = ch * w
-            q_img = QImage(rgb.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+            # Copy QImage to prevent referencing deallocated numpy memory (prevents SIGSEGV)
+            q_img = QImage(rgb.data, w, h, bytes_per_line, QImage.Format.Format_RGB888).copy()
             pix = QPixmap.fromImage(q_img)
             self.lbl_image.setPixmap(pix.scaled(self.lbl_image.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
             
@@ -184,9 +185,9 @@ class TAAMMainWindow(QMainWindow):
         
         self.setup_ui()
         
-        # Connect Streams
-        self.stdout_redirect.text_written.connect(self.log_sam.append)
-        self.stderr_redirect.text_written.connect(self.log_sam.append)
+        # Connect Streams (Use QueuedConnection to guarantee thread-safe GUI logging and avoid hangs)
+        self.stdout_redirect.text_written.connect(self.log_sam.append, Qt.ConnectionType.QueuedConnection)
+        self.stderr_redirect.text_written.connect(self.log_sam.append, Qt.ConnectionType.QueuedConnection)
         
         self.refresh_model_list()
 
@@ -424,131 +425,138 @@ class TAAMMainWindow(QMainWindow):
             QMessageBox.warning(self, "TAAM", "Please select a video from the sidebar list first.")
             return
 
-        threshold = self.spin_dn_threshold.value()
-        self.lbl_transition_preview.setText("Analyzing timeline for multiple transitions...")
-        self.prog_bar.setValue(0)
-        QApplication.processEvents()
+        # Temporarily disable main window controls to prevent user interaction and re-entrant clicks
+        # during timeline scanning which causes nested event loop deadlocks.
+        self.setEnabled(False)
+        
+        try:
+            threshold = self.spin_dn_threshold.value()
+            self.lbl_transition_preview.setText("Analyzing timeline for multiple transitions...")
+            self.prog_bar.setValue(0)
+            QApplication.processEvents()
 
-        cap = cv2.VideoCapture(self.current_video)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
+            cap = cv2.VideoCapture(self.current_video)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
 
-        if total_frames <= 0 or fps <= 0:
-            self.lbl_transition_preview.setText("Error reading video dimensions.")
-            cap.release()
-            return
+            if total_frames <= 0 or fps <= 0:
+                self.lbl_transition_preview.setText("Error reading video dimensions.")
+                cap.release()
+                return
 
-        step = max(500, total_frames // 1000)
-        brightnesses = []
-        frames_checked = []
+            step = max(500, total_frames // 1000)
+            brightnesses = []
+            frames_checked = []
 
-        total_steps = len(range(0, total_frames, step))
-        self.log_app.append(f"🔍 Timeline Scan: Initiating coarse pass ({total_steps} points)...")
+            total_steps = len(range(0, total_frames, step))
+            self.log_app.append(f"🔍 Timeline Scan: Initiating coarse pass ({total_steps} points)...")
 
-        # Coarse pass with real-time UI logging
-        for idx, f_idx in enumerate(range(0, total_frames, step)):
-            cap.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
-            ret, frame = cap.read()
-            if not ret:
-                continue
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            brightnesses.append(np.mean(gray))
-            frames_checked.append(f_idx)
-            
-            if idx % 10 == 0 or idx == total_steps - 1:
-                percent = int((f_idx / total_frames) * 100)
-                self.prog_bar.setValue(percent)
-                self.lbl_transition_preview.setText(f"Scanning timeline: Frame {f_idx:,} / {total_frames:,} ({percent}%)")
-                QApplication.processEvents()
-
-        transition_points = []
-        self.lbl_transition_preview.setText("Coarse pass finished. Fine-tuning crossings...")
-        self.log_app.append("🔍 Timeline Scan: Fine-tuning crossing zones...")
-        QApplication.processEvents()
-
-        # Fine pass with dynamic UI logging
-        for i in range(len(brightnesses) - 1):
-            b1, b2 = brightnesses[i], brightnesses[i+1]
-            if (b1 >= threshold and b2 < threshold) or (b1 < threshold and b2 >= threshold):
-                start_zone = frames_checked[i]
-                end_zone = frames_checked[i+1]
-                cap.set(cv2.CAP_PROP_POS_FRAMES, start_zone)
+            # Coarse pass with real-time UI logging
+            for idx, f_idx in enumerate(range(0, total_frames, step)):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
+                ret, frame = cap.read()
+                if not ret:
+                    continue
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                brightnesses.append(np.mean(gray))
+                frames_checked.append(f_idx)
                 
-                zone_transition = -1
-                for fine_f in range(start_zone, end_zone + 1):
-                    ret, f_frame = cap.read()
-                    if not ret:
-                        break
-                    f_gray = cv2.cvtColor(f_frame, cv2.COLOR_BGR2GRAY)
-                    f_avg = np.mean(f_gray)
+                if idx % 10 == 0 or idx == total_steps - 1:
+                    percent = int((f_idx / total_frames) * 100)
+                    self.prog_bar.setValue(percent)
+                    self.lbl_transition_preview.setText(f"Scanning timeline: Frame {f_idx:,} / {total_frames:,} ({percent}%)")
+                    QApplication.processEvents()
+
+            transition_points = []
+            self.lbl_transition_preview.setText("Coarse pass finished. Fine-tuning crossings...")
+            self.log_app.append("🔍 Timeline Scan: Fine-tuning crossing zones...")
+            QApplication.processEvents()
+
+            # Fine pass with dynamic UI logging
+            for i in range(len(brightnesses) - 1):
+                b1, b2 = brightnesses[i], brightnesses[i+1]
+                if (b1 >= threshold and b2 < threshold) or (b1 < threshold and b2 >= threshold):
+                    start_zone = frames_checked[i]
+                    end_zone = frames_checked[i+1]
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, start_zone)
                     
-                    if fine_f % 100 == 0:
-                        self.lbl_transition_preview.setText(f"Fine-tuning boundary around Frame {fine_f:,}...")
-                        QApplication.processEvents()
+                    zone_transition = -1
+                    for fine_f in range(start_zone, end_zone + 1):
+                        ret, f_frame = cap.read()
+                        if not ret:
+                            break
+                        f_gray = cv2.cvtColor(f_frame, cv2.COLOR_BGR2GRAY)
+                        f_avg = np.mean(f_gray)
                         
-                    if (b1 >= threshold and f_avg < threshold) or (b1 < threshold and f_avg >= threshold):
-                        zone_transition = fine_f
-                        break
+                        if fine_f % 100 == 0:
+                            self.lbl_transition_preview.setText(f"Fine-tuning boundary around Frame {fine_f:,}...")
+                            QApplication.processEvents()
+                            
+                        if (b1 >= threshold and f_avg < threshold) or (b1 < threshold and f_avg >= threshold):
+                            zone_transition = fine_f
+                            break
+                    
+                    if zone_transition != -1:
+                        if not transition_points or (zone_transition - transition_points[-1]) > (fps * 300):
+                            transition_points.append(zone_transition)
+
+            self.log_app.append(f"🔍 Dynamic Tagging: Evaluation of {len(transition_points)} transition states...")
+            
+            # Partition segments and assign dynamic labels (day1, night1, day2, night2...)
+            boundaries = [0] + transition_points + [total_frames]
+            segment_labels = []
+            day_counter = 1
+            night_counter = 1
+
+            for i in range(len(boundaries) - 1):
+                seg_start = boundaries[i]
+                seg_end = boundaries[i+1]
                 
-                if zone_transition != -1:
-                    if not transition_points or (zone_transition - transition_points[-1]) > (fps * 300):
-                        transition_points.append(zone_transition)
+                # Read segment's midpoint frame to prevent transition-ramp bias
+                mid_frame = (seg_start + seg_end) // 2
+                cap.set(cv2.CAP_PROP_POS_FRAMES, mid_frame)
+                ret, test_frame = cap.read()
+                b_val = threshold
+                if ret:
+                    b_val = np.mean(cv2.cvtColor(test_frame, cv2.COLOR_BGR2GRAY))
+                
+                is_day = b_val >= threshold
+                if is_day:
+                    segment_labels.append(f"day{day_counter}")
+                    day_counter += 1
+                else:
+                    segment_labels.append(f"night{night_counter}")
+                    night_counter += 1
 
-        self.log_app.append(f"🔍 Dynamic Tagging: Evaluation of {len(transition_points)} transition states...")
-        
-        # Partition segments and assign dynamic labels (day1, night1, day2, night2...)
-        boundaries = [0] + transition_points + [total_frames]
-        segment_labels = []
-        day_counter = 1
-        night_counter = 1
+            # Format descriptive labels for each boundary
+            named_transitions = []
+            for i in range(len(transition_points)):
+                f_idx = transition_points[i]
+                label = f"{segment_labels[i].upper()} ➡️ {segment_labels[i+1].upper()}"
+                named_transitions.append((f_idx, label))
 
-        for i in range(len(boundaries) - 1):
-            seg_start = boundaries[i]
-            seg_end = boundaries[i+1]
+            cap.release()
+            self.prog_bar.setValue(100)
+            QApplication.processEvents()
+
+            initial_preview_frame = transition_points[0] if transition_points else (total_frames // 2)
+
+            # Launch verifier with named transition tuples
+            verifier = TransitionVerifierDialog(self.current_video, named_transitions, initial_preview_frame, self)
             
-            # Read segment's midpoint frame to prevent transition-ramp bias
-            mid_frame = (seg_start + seg_end) // 2
-            cap.set(cv2.CAP_PROP_POS_FRAMES, mid_frame)
-            ret, test_frame = cap.read()
-            b_val = threshold
-            if ret:
-                b_val = np.mean(cv2.cvtColor(test_frame, cv2.COLOR_BGR2GRAY))
+            self.prog_bar.setValue(0)
             
-            is_day = b_val >= threshold
-            if is_day:
-                segment_labels.append(f"day{day_counter}")
-                day_counter += 1
+            if verifier.exec() == QDialog.DialogCode.Accepted:
+                confirmed_threshold = verifier.get_threshold()
+                self.spin_dn_threshold.setValue(confirmed_threshold)
+                
+                self.lbl_transition_preview.setText(f"Found {len(transition_points)} transitions. Safe threshold set to: {confirmed_threshold}")
+                self.log_app.append(f"✅ VERIFIED: Analyzed {len(transition_points)} transition boundaries. Safe threshold set to: {confirmed_threshold}")
             else:
-                segment_labels.append(f"night{night_counter}")
-                night_counter += 1
-
-        # Format descriptive labels for each boundary
-        named_transitions = []
-        for i in range(len(transition_points)):
-            f_idx = transition_points[i]
-            label = f"{segment_labels[i].upper()} ➡️ {segment_labels[i+1].upper()}"
-            named_transitions.append((f_idx, label))
-
-        cap.release()
-        self.prog_bar.setValue(100)
-        QApplication.processEvents()
-
-        initial_preview_frame = transition_points[0] if transition_points else (total_frames // 2)
-
-        # Launch verifier with named transition tuples
-        verifier = TransitionVerifierDialog(self.current_video, named_transitions, initial_preview_frame, self)
-        
-        self.prog_bar.setValue(0)
-        
-        if verifier.exec() == QDialog.DialogCode.Accepted:
-            confirmed_threshold = verifier.get_threshold()
-            self.spin_dn_threshold.setValue(confirmed_threshold)
-            
-            self.lbl_transition_preview.setText(f"Found {len(transition_points)} transitions. Safe threshold set to: {confirmed_threshold}")
-            self.log_app.append(f"✅ VERIFIED: Analyzed {len(transition_points)} transition boundaries. Safe threshold set to: {confirmed_threshold}")
-        else:
-            self.lbl_transition_preview.setText("Verification canceled.")
-            self.log_app.append("⚠️ Visual transition calibration canceled.")
+                self.lbl_transition_preview.setText("Verification canceled.")
+                self.log_app.append("⚠️ Visual transition calibration canceled.")
+        finally:
+            self.setEnabled(True)
     
     def on_ann_change(self):
         if self.current_video:
