@@ -104,7 +104,7 @@ It is highly recommended to install TAAM in an isolated environment using either
 * **Windows (PowerShell):**
   ```powershell
   python -m venv taam_env
-  .\\taam_env\\Scripts\\Activate.ps1
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass; .\taam_env\Scripts\Activate.ps1
   ```
 * **Linux / macOS:**
   ```bash
