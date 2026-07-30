@@ -1,4 +1,4 @@
-# TAAM: Track Any Aquatic Model
+# TAAM: Track Aquatic Animal Model
 
 **TAAM** is a high-performance, professional-grade desktop application designed for the automated tracking and behavioral analysis of aquatic animals in laboratory environments.
 
@@ -69,6 +69,85 @@ Draw bounding boxes on a few frames. TAAM records them as few-shot prompts.
 
 ## 4️⃣ DEPLOYMENT
 Use trained models for high-speed tracking on new videos.
+
+---
+
+# 📖 Detailed Modules & Usage Guide
+
+TAAM is structured into five core modules accessible via the left sidebar and main tab widget. This design allows researchers to seamlessly transition from raw video handling to advanced behavioral statistical analysis.
+
+### 📁 The Workspace Directory Concept
+Before running any analysis, the user must select a workspace folder using the sidebar. This folder acts as the central database of the application. All temporary files, exported datasets, trained model weights, and the default settings file are organized here. 
+
+```text
+TAAM_Workspace/
+├── Datasets/           # Automatically generated YOLO training data
+├── Experiments/        # Raw tracking CSVs and annotated videos
+├── Models/             # Trained .pt weights categorized by version
+└── endpoints.json      # Saved parameters and zone configurations
+```
+
+---
+
+### ✂️ Module 1: Video Pre-Processor (Splitter)
+Continuous twenty four hour video files contain millions of frames, creating a major data burden. Loading these massive files directly into neural networks like SAM 3 will cause instant memory crashes.
+1.  Navigate to **Tab 1: SPLIT**.
+2.  Click **Add Huge Videos** to load raw recordings into the queue.
+3.  Set the **Split Seconds** (default is sixty seconds).
+4.  Select a target directory and click **Start Batch Splitting**.
+The engine uses high speed parallel processing to slice your large files into contiguous, VRAM safe segments without dropping a single frame.
+
+---
+
+### 🎨 Module 2: Few-Shot Annotation Canvas
+This module allows researchers to "teach" the AI what to track using only three to five initial frames, bypassing the need for manual data labeling.
+1.  Select a splitted video from your sidebar list.
+2.  Type your target species as a comma separated list (e.g., `zebrafish, medaka`) in the class input field. The active label dropdown will automatically update.
+3.  Use the horizontal slider to find a frame containing clear views of your subjects.
+4.  Draw a bounding box around each animal. Use the shortcuts **Ctrl+C** to copy a box and **Ctrl+V** to paste it onto the next frame. Use **Delete** to remove a mistake.
+Your annotations are automatically synced in the background to prevent data loss.
+
+---
+
+### 🧠 Module 3: Teacher-Student AI Training Pipeline
+This module executes the automated knowledge distillation. The expert segmentation capabilities of a heavy foundation model are transferred into a lightweight, high speed edge model.
+1.  Navigate to **Tab 3: TRAIN**.
+2.  Input a unique name for your project to ensure correct versioning.
+3.  Select your target task type: **Detection** (for standard speed tracking) or **Segmentation** (for precise polygon mask training).
+4.  Adjust your parameters: set the maximum frames to sample and adjust the Train/Val/Test split sliders (the UI automatically balances them to ensure they always sum to one hundred percent).
+5.  Click **Launch Full Auto Pipeline**. 
+*   **The SAM 3 Teacher** propagates your annotations across the chunks, exporting coordinate data and writing frame JPEGs to a raw pool.
+*   **The YOLO Student** then randomly samples those frames, splits them scientifically into training folders, and fine tunes itself completely in the background.
+
+---
+
+### 📐 Module 4: Advanced Arena (ROI) Designer
+For multi tank or multi well plate assays, researchers must segregate tracking data by individual container. This tab is used to define the geometric boundaries of each tank.
+1.  Navigate to **Tab 4: ADVANCED**.
+2.  Choose your arena type from the dropdown: **Rectangle**, **Circle**, or **Grid**.
+3.  For a multi well plate (e.g., cichlid tanks or zebrafish larvae), select **Grid** and input the row and column count (e.g., $2 \times 2$).
+4.  Draw the shape over your video. Use the transformation sliders in the sidebar to adjust width, height, and rotation to compensate for camera lens tilt.
+The system automatically splits grids into individual wells and indexes them from left to right, then top to bottom, ensuring the Excel sheets match your physical setup.
+
+---
+
+### 📈 Module 5: Behavioral Endpoints & Analytics Suite
+This is the scientific mission control popup designed to extract clinical endpoints from your raw tracking CSVs without any data preprocessing or filtering.
+
+1.  Click the large green **Behavioral Analysis** button in the sidebar to open the dedicated analysis window.
+2.  **Create Groups:** Click "Create Group" and name them manually (e.g., *Control*, *Treated_Dose_A*). Select a group and click "Add CSV" to import the TAAM tracked files.
+3.  **Load ROI:** Click "Load ROI Designer JSON" to import your tank boundaries.
+4.  **Auto-Fill Metadata:** Click "Load Video". The system will automatically read the FPS and calculate the Duration from the file, filling in the parameters for you.
+5.  **Adjust Zones:** Select "Arena 1" from the dropdown. Move the sliders to define the vertical center line of the tank. The left side is calculated as the Top portion, and the right side is the Bottom portion (lateral view logic). Adjust each arena individually.
+6.  **Checklist:** Check or uncheck the specific behavioral endpoints you want to extract for your manuscript.
+7.  **Generate Report:** Click "Generate Scientific Report". The engine calculates all endpoints and saves a consolidated, publication ready CSV named after your files.
+
+#### Mathematical Formulations calculated in the Module:
+*   **Average Speed (cm/s):** $\bar{v} = \frac{1}{N} \sum_{i=1}^{N} v_{i}$
+*   **Time in Top / Bottom (%):** $Z_{top} = \frac{\text{Count}(x_{i} < X_{split})}{N} \times 100$
+*   **Average Thigmotaxis (cm):** $D_{CL} = \frac{1}{N} \sum_{i=1}^{N} \frac{|x_{i} - X_{split}|}{C}$
+*   **Shannon Entropy (Hartleys):** $H = -\sum_{j=1}^{M} P_{j} \log_{10}(P_{j})$ *(Uses a base-10 log and 10x10 grid to constrain values to a clean scientific range of 0.9 to 1.1)*.
+*   **Fractal Dimension:** Slope of the log-log regression of the correlation integral using exact 0.1 to 3.1 r-steps.
 
 ---
 
@@ -181,7 +260,7 @@ cd TAAM/source_code
 * **Windows (PowerShell):**
   ```powershell
   python -m venv sam3_tracker_venv
-  .\\sam3_tracker_venv\\Scripts\\Activate.ps1
+  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass; .\sam3_tracker_venv\Scripts\Activate.ps1
   ```
 * **Linux (Terminal):**
   ```bash
