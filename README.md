@@ -123,7 +123,7 @@ This method is the easiest deployment option. It uses the package manager to dow
 * **Windows (PowerShell):**
   ```powershell
   python -m venv taam_env
-  .\\taam_env\\Scripts\\Activate.ps1
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass; .\taam_env\Scripts\Activate.ps1
   ```
 * **Linux / macOS:**
   ```bash
