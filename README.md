@@ -1,6 +1,6 @@
 # TAAM: Track Aquatic Animal Model
 
-**TAAM** is a high-performance, professional-grade desktop application designed for the automated tracking and behavioral analysis of aquatic animals in laboratory environments.
+**TAAM** is a high-performance, professional-grade desktop application designed for the automated tracking and behavioral analysis of aquatic animals
 
 TAAM bridges the gap between large AI foundation models and real-time edge AI, combining:
 
