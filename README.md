@@ -181,7 +181,7 @@ cd TAAM/source_code
 * **Windows (PowerShell):**
   ```powershell
   python -m venv sam3_tracker_venv
-  .\\sam3_tracker_venv\\Scripts\\Activate.ps1
+  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass; .\sam3_tracker_venv\Scripts\Activate.ps1
   ```
 * **Linux (Terminal):**
   ```bash
