@@ -1,6 +1,6 @@
 # TAAM: Track Any Aquatic Model
 
-**TAAM** is a high-performance, professional-grade desktop application designed for the automated tracking and behavioral analysis of aquatic animals (Zebrafish, Medaka, Daphnia, etc.) in laboratory environments.
+**TAAM** is a high-performance, professional-grade desktop application designed for the automated tracking and behavioral analysis of aquatic animals in laboratory environments.
 
 TAAM bridges the gap between large AI foundation models and real-time edge AI, combining:
 
@@ -8,7 +8,7 @@ TAAM bridges the gap between large AI foundation models and real-time edge AI, c
 ⚡ **YOLO (Student Model)** — ultra-fast inference (100+ FPS) for real-time tracking
 
 ![Status](https://img.shields.io/badge/Status-Production--Ready-brightgreen)
-![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
 ![AI](https://img.shields.io/badge/AI-SAM3%20%2B%20YOLO-orange)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
@@ -91,16 +91,35 @@ Datasets/
 
 ---
 
-# 🛠️ Installation
+# 🖥️ Hardware Prerequisite: NVIDIA GPU & CUDA Setup
 
-TAAM can be installed inside your active Python virtual environment directly via `pip`. 
+To run the SAM 3 and YOLO pipelines with GPU acceleration, you must have an NVIDIA GPU and verify your graphics drivers before installing TAAM.
+
+### Step 1: Install Latest NVIDIA Drivers
+1. Go to the [Official NVIDIA Driver Downloads Page](https://www.nvidia.com/Download/index.aspx).
+2. Select your Product Type, Product Series, and Operating System.
+3. Download and install the latest **Game Ready Driver** or **Studio Driver**.
+4. Restart your computer after installation completes.
+
+### Step 2: Verify Your System's Driver Status
+Open your command prompt or terminal and run:
+```bash
+nvidia-smi
+```
+If your drivers are installed correctly, this command will output your GPU's current status and the highest supported CUDA Version (e.g., CUDA 12.1 or CUDA 11.8).
 
 ---
 
-## 1. Create and Activate a Virtual Environment
-It is highly recommended to install TAAM in an isolated environment using either Python `venv` or `conda`.
+# 🛠️ Installation Pathways
 
-### Option A: Using Python venv
+Choose **one** of the three installation pathways below based on your workflow. Option 1 is highly recommended for standard users.
+
+---
+
+## 📦 Option 1: Quick Install via PyPI (Recommended / Zero-Clone)
+This method is the easiest deployment option. It uses the package manager to download the app directly. You do not need to clone the repository manually; the package will handle everything on your first launch.
+
+### 1. Create and Activate a Virtual Environment
 * **Windows (PowerShell):**
   ```powershell
   python -m venv taam_env
@@ -112,104 +131,139 @@ It is highly recommended to install TAAM in an isolated environment using either
   source taam_env/bin/activate
   ```
 
-### Option B: Using Conda
-```bash
-conda create -n taam_env python=3.10 -y
-conda activate taam_env
-```
-
----
-
-## 2. Install PyTorch with GPU Support (Recommended)
-Before installing the application, ensure that you install the version of PyTorch that matches your system's hardware to guarantee GPU-accelerated tracking.
-
-* **For Windows/Linux (with CUDA 12.1):**
+### 2. Install PyTorch with GPU Support
+Install the PyTorch wheels matching your active CUDA runtime:
+* **For CUDA 12.1:**
   ```bash
   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
   ```
-* **For Windows/Linux (with CUDA 11.8):**
+* **For CUDA 11.8:**
   ```bash
   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
   ```
-* **For macOS / CPU-only installations:**
+
+### 3. Install TAAM and Run
+Download the application and start it:
+```bash
+pip install taam-tracker
+taam
+```
+*(On your first launch, the app will ask for your Hugging Face Token in the terminal and configure the remaining resources automatically).*
+
+---
+
+## 🪟 Option 2: Automated Batch Scripts (Windows Local Source)
+If you prefer running the application from the local cloned source code, you can use automated Windows scripts.
+
+### 1. Clone the Repository
+Open PowerShell and run:
+```powershell
+git clone https://github.com/yousaf2018/TAAM.git
+cd TAAM/source_code
+```
+
+### 2. Run the Scripts
+* **Step 1:** Double-click **`INSTALLER.bat`**. This script checks your environment, installs PyTorch with CUDA, compiles local submodules, and configures Hugging Face authentication.
+* **Step 2:** Use **`RUNNER.bat`** to launch the desktop application. This script cleans up runtime environmental conflicts automatically.
+
+---
+
+## 🐧 Option 3: Manual Installation from Source (Step-by-Step)
+For developers or users running manual source builds on Windows or Linux.
+
+### 1. Clone and Enter Directory
+```bash
+git clone https://github.com/yousaf2018/TAAM.git
+cd TAAM/source_code
+```
+
+### 2. Setup the Environment
+* **Windows (PowerShell):**
+  ```powershell
+  python -m venv sam3_tracker_venv
+  .\\sam3_tracker_venv\\Scripts\\Activate.ps1
+  ```
+* **Linux (Terminal):**
+  ```bash
+  python3 -m venv sam3_tracker_venv
+  source sam3_tracker_venv/bin/activate
+  ```
+
+### 3. Install PyTorch with CUDA
+* **For Windows (PowerShell):**
+  Try CUDA 12.1 first:
+  ```powershell
+  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+  python -c "import torch; print('CUDA 12.1 Working:', torch.cuda.is_available())"
+  ```
+  If it returns `False`, fall back to CUDA 11.8:
+  ```powershell
+  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+  python -c "import torch; print('CUDA 11.8 Working:', torch.cuda.is_available())"
+  ```
+* **For Linux:**
   ```bash
   pip install torch torchvision torchaudio
   ```
 
----
+### 4. Install Dependencies & Submodules
+* **Windows (PowerShell):**
+  ```powershell
+  pip install -r requirements-win.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+  pip install -e ./sam3
+  ```
+* **Linux (Terminal):**
+  ```bash
+  pip install -r requirements.txt
+  pip install -e ./sam3
+  ```
 
-## 3. Install TAAM via pip
-Run the following command to download and install the TAAM desktop application along with its dependencies:
+### 5. Hugging Face Login
 ```bash
-pip install taam-tracker
+python -c "from huggingface_hub import login; login(token='YOUR_TOKEN_HERE')"
 ```
+
+### 6. Launch the App
+* **Windows:** `python main.py`
+* **Linux:** `python3 main.py`
 
 ---
 
-## 4. Launch the Application
-Once installed, you can start the desktop interface from your terminal at any time by running:
-```bash
-taam
-```
+# 🛠️ Summary of Commands for Option 3 Quick Copy
 
----
-
-# 🧠 First-Run Configuration (SAM 3 Setup)
-
-When you run `taam` for the first time, your terminal will ask if you want to configure **SAM 3 Tracking**:
-
-```text
-=============================================================
-           TAAM TRACKER - MODEL CONFIGURATION
-=============================================================
-To enable the SAM3 model, a Hugging Face Token is required.
-If you skip this, only Ultralytics YOLO will be available.
--------------------------------------------------------------
-Paste your Hugging Face Token (or press Enter to skip):
-```
-
-### Option A: Enable Full SAM 3 + YOLO Tracking
-1. Create a free account on [Hugging Face](https://huggingface.co/).
-2. Request access on the [SAM 3 (Segment Anything 3) Model Page](https://huggingface.co/).
-3. Generate a token with at least **Read** permissions in your [Hugging Face Developer Settings](https://huggingface.co/settings/tokens).
-4. Paste the token into your terminal and press **Enter**.
-5. The application will log you in, download the local helper submodules, and launch. This setup is cached and will not prompt you again on subsequent runs.
-
-### Option B: YOLO-Only Tracking Mode
-1. Simply press **Enter** without pasting a token.
-2. The installer will skip the SAM 3 configurations and launch immediately in YOLO-only mode.
-
----
-
-## 🛠️ Commands Reference
-
-| Task | Windows (PowerShell) | Linux / macOS (Terminal) |
+| Task | Windows (PowerShell) | Linux (Terminal) |
 |------|----------------------|------------------|
-| **Create Environment** | `python -m venv taam_env` | `python3 -m venv taam_env` |
-| **Activate Environment** | `.\\taam_env\\Scripts\\Activate.ps1` | `source taam_env/bin/activate` |
-| **Install PyTorch** | *Use the cu121 or cu118 wheel links above* | `pip install torch` *(CPU or local default)* |
-| **Install TAAM** | `pip install taam-tracker` | `pip install taam-tracker` |
-| **Launch App** | `taam` | `taam` |
+| **Clone** | `git clone https://github.com/yousaf2018/TAAM.git` | Same |
+| **Venv** | `python -m venv sam3_tracker_venv` | `python3 -m venv sam3_tracker_venv` |
+| **Activate** | `.\\sam3_tracker_venv\\Scripts\\Activate.ps1` | `source sam3_tracker_venv/bin/activate` |
+| **Torch** | *Use CUDA wheel links above* | `pip install torch` |
+| **Requirements** | `pip install -r requirements-win.txt` | `pip install -r requirements.txt` |
+| **Local Mod** | `pip install -e ./sam3` | Same |
+| **Launch** | `python main.py` | `python3 main.py` |
 
 ---
 
-## ❓ Troubleshooting
+# ❓ Troubleshooting
 
-### Re-triggering the Hugging Face / SAM 3 Prompt
-If you skipped the token configuration on your first launch but want to set up SAM 3 now:
-1. Delete your local Hugging Face credentials cache:
-   * **Windows:** Delete the folder `C:\\Users\\YourUsername\\.cache\\huggingface\\`
-   * **Linux / macOS:** Delete the directory `~/.cache/huggingface/`
-2. Run `taam` in your terminal to see the token configuration prompt again.
+### DLL Load Failed (Windows)
+PyQt6 can conflict with system-level Qt directories (like Anaconda or OBS Studio). 
+* **Solution:** If running from source, clean your path before running `main.py`:
+  ```powershell
+  $env:PATH = "C:\\Windows\\system32;C:\\Windows;D:\\path\\to\\your\\project\\sam3_tracker_venv\\Scripts"
+  python main.py
+  ```
+  *(If you installed via **Option 1**, this cleanup is handled programmatically behind the scenes).*
 
-### PyQt6 DLL Load Errors (Windows Conflicts)
-PyQt6 can conflict with secondary graphical engines (like OBS Studio, Anaconda distributions, or external media drivers). 
-* **Solution:** The `taam-tracker` package contains an automatic path correction engine that sanitizes your active environment runtime. Ensure you are running the app inside your dedicated virtual environment by calling `taam` in your terminal.
+### Hugging Face Login Hangs
+If the interactive CLI login hangs, use the non-interactive inline login method:
+```bash
+python -c "from huggingface_hub import login; login(token='your_token_here')"
+```
 
-### PyTorch says GPU is Unavailable (`CUDA is False`)
-1. Ensure your computer has a compatible NVIDIA GPU.
-2. Install the latest official GPU drivers directly from [nvidia.com](https://www.nvidia.com/).
-3. Re-run your corresponding PyTorch installation command with the `--force-reinstall` flag to make sure the CPU version was not cached.
+### CUDA `torch.cuda.is_available()` returns False
+1. Verify that your graphics card is listed inside your device manager.
+2. Confirm that you have installed the latest NVIDIA drivers matching your hardware.
+3. Re-run your corresponding PyTorch installation command with the `--force-reinstall` flag to overwrite any cached CPU-only builds.
 
 ---
 
