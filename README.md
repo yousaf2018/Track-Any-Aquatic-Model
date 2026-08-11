@@ -1,4 +1,4 @@
-# TAAM: Track Aquatic Animal Model
+# TAAM: Track Any Aquatic Model
 
 **TAAM** is a high-performance, professional-grade desktop application designed for the automated tracking and behavioral analysis of aquatic animals
 
